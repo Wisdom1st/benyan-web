@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="本言">
+<meta name="theme-color" content="#1f6f5c">
+<title>本言</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><h1>本言</h1><nav>
+  <button class="tab on" data-tab="talk">说话</button>
+  <button class="tab" data-tab="dict">词典</button>
+  <button class="tab" data-tab="hist">历史</button>
+</nav></header>
+
+<main>
+<section id="talk" class="pane on">
+  <button id="mic" aria-label="点一下开始说话">🎙️<span id="micLabel">点一下开始说话</span></button>
+  <p id="status" class="status" role="status"></p>
+  <div class="tones" id="tones"></div>
+  <label class="lbl" for="raw">原话（可直接用 iPhone 键盘上的麦克风输入或修改）</label>
+  <textarea id="raw" rows="4" placeholder="在这里说或打字……"></textarea>
+  <div class="row"><button id="polishBtn" class="btn">整理</button><button id="clearBtn" class="btn ghost">清空</button></div>
+  <label class="lbl" for="out">整理后</label>
+  <textarea id="out" rows="5" readonly></textarea>
+  <button id="copyBtn" class="btn big">复制</button>
+</section>
+
+<section id="dict" class="pane">
+  <p class="hint">把你说的词换成要写的词，只存在这台手机上。圣经词库（<span id="faithCount"></span> 个词）已内置，不用添加。</p>
+  <div class="row"><input id="spoken" placeholder="说成"><input id="written" placeholder="写成"></div>
+  <button id="addEntry" class="btn">添加</button>
+  <ul id="entries" class="list"></ul>
+</section>
+
+<section id="hist" class="pane">
+  <button id="clearHist" class="btn ghost">清空历史</button>
+  <ul id="history" class="list"></ul>
+</section>
+</main>
+<script src="polisher.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
