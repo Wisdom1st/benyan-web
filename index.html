@@ -23,15 +23,17 @@
 
 <main>
 <section id="talk" class="pane on">
-  <button id="mic" aria-label="点一下开始说话">🎙️<span id="micLabel">点一下开始说话</span></button>
-  <p id="status" class="status" role="status"></p>
-  <div class="tones" id="tones"></div>
-  <label class="lbl" for="raw">原话（可直接用 iPhone 键盘上的麦克风输入或修改）</label>
-  <textarea id="raw" rows="4" placeholder="在这里说或打字……"></textarea>
-  <div class="row"><button id="polishBtn" class="btn">整理</button><button id="clearBtn" class="btn ghost">清空</button></div>
   <label class="lbl" for="out">整理后</label>
-  <textarea id="out" rows="5" readonly></textarea>
+  <textarea id="out" rows="6" readonly placeholder="点下面的麦克风说话，整理好的文字会出现在这里。"></textarea>
   <button id="copyBtn" class="btn big">复制</button>
+  <p id="status" class="status" role="status"></p>
+  <details id="more">
+    <summary>原话与语气</summary>
+    <div class="tones" id="tones"></div>
+    <label class="lbl" for="raw">原话（也可用 iPhone 键盘上的麦克风输入或修改）</label>
+    <textarea id="raw" rows="4" placeholder="在这里说或打字……"></textarea>
+    <div class="row"><button id="polishBtn" class="btn">整理</button><button id="clearBtn" class="btn ghost">清空</button></div>
+  </details>
 </section>
 
 <section id="dict" class="pane">
@@ -46,6 +48,7 @@
   <ul id="history" class="list"></ul>
 </section>
 </main>
+<footer id="bar"><button id="mic" aria-label="点一下开始说话">🎙️<span id="micLabel">点一下开始说话</span></button></footer>
 <script src="polisher.js"></script>
 <script src="app.js"></script>
 </body>

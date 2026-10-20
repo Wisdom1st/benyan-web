@@ -58,6 +58,7 @@
   $('mic').onclick = () => {
     if (!SR) return;
     if (live) { rec && rec.stop(); return; }
+    document.querySelector('.tab[data-tab=talk]').click();
     rec = new SR(); rec.lang = 'zh-CN'; rec.continuous = true; rec.interimResults = true;
     base = $('raw').value ? $('raw').value.replace(/\s+$/, '') : ''; finalText = '';
     rec.onstart = () => { setMic(true); status('请说话……'); };
