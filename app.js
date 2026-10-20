@@ -62,10 +62,19 @@
     rec = new SR(); rec.lang = 'zh-CN'; rec.continuous = true; rec.interimResults = true;
     base = $('raw').value ? $('raw').value.replace(/\s+$/, '') : ''; finalText = '';
     rec.onstart = () => { setMic(true); status('请说话……'); };
+    let cuts = [], prevInterim = '', lastAt = 0, finalCount = 0;
     rec.onresult = (e) => {
-      let interim = ''; finalText = '';
-      for (let i = 0; i < e.results.length; i++) { const r = e.results[i]; if (r.isFinal) finalText += r[0].transcript; else interim += r[0].transcript; }
-      $('raw').value = base + finalText + interim;
+      // 每个最终片段、或停顿超过 0.8 秒的位置，都当作一句话的分界
+      const now = Date.now(); const finals = []; let interim = '';
+      for (let i = 0; i < e.results.length; i++) { const r = e.results[i]; if (r.isFinal) finals.push(r[0].transcript); else interim += r[0].transcript; }
+      if (finals.length !== finalCount) { finalCount = finals.length; cuts = []; prevInterim = ''; }
+      if (lastAt && now - lastAt > 800 && prevInterim && interim.startsWith(prevInterim) && interim.length > prevInterim.length) cuts.push(prevInterim.length);
+      lastAt = now; prevInterim = interim;
+      const segs = []; let from = 0;
+      for (const c of cuts) { segs.push(interim.slice(from, c)); from = c; }
+      segs.push(interim.slice(from));
+      const spoken = P.joinSegments([...finals, ...segs]);
+      $('raw').value = base + (base && spoken && !/[。！？，,.!?\n]$/.test(base) ? '。' : '') + spoken;
     };
     rec.onerror = (e) => { const m = ERR[e.error] ?? ('听写出错：' + e.error + '。可以改用键盘上的麦克风。'); if (m) status(m, true); };
     rec.onend = () => { setMic(false); if ($('raw').value.trim() !== base.trim()) { run(true); if (!$('status').classList.contains('err')) status('已整理。点“复制”即可使用。'); } };

@@ -22,3 +22,24 @@ const cases = [
 ];
 for (const [n, i, o, e] of cases) test(n, () => assert.strictEqual(P.polish(i, o), e));
 test('faith hints: 100 unique, has 耶稣 & 罗马书', () => { const h = P.recognitionHints; assert.strictEqual(h.length, 100); assert.strictEqual(new Set(h).size, 100); assert.ok(h.includes('耶稣') && h.includes('罗马书')); });
+// 未加标点的真实听写（Safari zh-CN 返回无标点文本）
+const dictation = [
+ ['unpunctuated question','我明天想去教会参加主日崇拜但是我不知道几点开始你知道吗','我明天想去教会参加主日崇拜，但是我不知道几点开始，你知道吗？'],
+ ['bible sentence','耶苏说我就是道路真理生命若不借着我没有人能到父那里去所以我们要因信称意','耶稣说我就是道路真理生命，若不借着我没有人能到父那里去。所以我们要因信称义。'],
+ ['3-point list with preface','我们这次聚会要准备三件事第一是准备诗歌第二是安排讲员第三是准备茶点','我们这次聚会要准备三件事：\n1. 准备诗歌\n2. 安排讲员\n3. 准备茶点'],
+ ['unpunctuated 首先 list','首先买牛奶其次买面包最后买鸡蛋','1. 买牛奶\n2. 买面包\n3. 买鸡蛋'],
+ ['然后/还有 enumeration','今天要买牛奶然后买面包还有鸡蛋','1. 今天要买牛奶\n2. 买面包\n3. 鸡蛋'],
+ ['一个是/另一个是','我有两个担心一个是时间不够另一个是人手不足','我有两个担心：\n1. 时间不够\n2. 人手不足'],
+ ['exclamation','感谢主今天天气太好了','感谢主！今天天气太好了！'],
+ ['yes-no question word','这个方案是不是可以','这个方案是不是可以？'],
+ ['unpunctuated self-correction','嗯那个我明天不对是后天上午十点开会','后天上午十点开会。'],
+ ['no double punctuation when Safari already punctuates','你好吗。我很好。','你好吗？我很好。'],
+ ['already punctuated stays','今天下雨了，我们改天再去吧。','今天下雨了，我们改天再去吧。'],
+];
+for (const [n, i, e] of dictation) test(n, () => assert.strictEqual(P.polish(i), e));
+test('segments joined with boundary punctuation', () => assert.strictEqual(P.polish(P.joinSegments(['今天晚上有祷告会', '你会来吗', '我会准时到'])), '今天晚上有祷告会。你会来吗？我会准时到。'));
+test('long text split into paragraphs', () => {
+  const t = '这周的查经我们读罗马书第八章大家可以提前预习一下因为内容比较多所以我们会分两次来讲另外请大家记得带圣经和笔记本还有如果有问题的话可以在群里先提出来我们一起讨论你们觉得周三晚上七点可以吗我们下周还会继续读第九章同时也请大家为这次的福音聚会代祷';
+  const out = P.polish(t);
+  assert.ok(out.includes('\n\n'), out); assert.ok(!/[，。？！]{2}/.test(out), out); assert.ok(/[。？！]$/.test(out), out);
+});

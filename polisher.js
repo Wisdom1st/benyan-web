@@ -203,12 +203,12 @@
 
   // ---------- Lists & tone ----------
   const trimListItem = (s) => trimSet(trimEdges(s), '，,、。.!！？?；;：: \n');
-  const numbered = (items) => items.map((x, i) => `${i + 1}. ${x}`).join('\n');
+  const numbered = (items) => (items.preface ? items.preface + '：\n' : '') + items.map((x, i) => `${i + 1}. ${x}`).join('\n');
   function partsByRanges(ch, ranges) {
     if (!ranges.length) return [ch.join('')];
     const items = [];
-    if (ranges[0][0] > 0) { const pre = trimEdges(ch.slice(0, ranges[0][0]).join('')); if (pre) items.push(pre); }
-    ranges.forEach((r, k) => { const end = k + 1 < ranges.length ? ranges[k + 1][0] : ch.length; const it = trimListItem(ch.slice(r[1], end).join('')); if (it) items.push(it); });
+    if (ranges[0][0] > 0) { const pre = trimListItem(ch.slice(0, ranges[0][0]).join('')); if (pre) items.preface = pre; }
+    ranges.forEach((r, k) => { const end = k + 1 < ranges.length ? ranges[k + 1][0] : ch.length; const it = trimListItem(ch.slice(r[1], end).join('')).replace(/^是(?![否的非不])/, ''); if (it) items.push(it); });
     return items;
   }
   function englishListMatches(ch) {
@@ -222,7 +222,7 @@
   }
   function formatLists(text) {
     if (text.includes('\n1.')) return text;
-    const mk = byLen(['首先','其次','接着','最后','第一','第二','第三','第四','第五','一是','二是','三是','四是','五是']).map(A);
+    const mk = byLen(['另一个是','一个是','首先','其次','接着','最后','第一','第二','第三','第四','第五','一是','二是','三是','四是','五是']).map(A);
     const ch = A(text), matches = []; let i = 0;
     while (i < ch.length) {
       let found = false;
@@ -275,21 +275,133 @@
     return v;
   }
 
-  const defaults = { tone: 'clear', entries: [], removeFillers: true, removeRepetition: true, applySelfCorrection: true, formatLists: true, spokenPunctuation: true };
+
+  // ---------- Auto punctuation & structure (for unpunctuated Safari dictation) ----------
+  const MARK = '\u0001'; // inserted sentence end, resolved later to 。？！
+  const CONNECTIVES = ['就是说','但是','所以','因为','然后','而且','如果','虽然','不过','另外','同时','其实','可是','还有','不对','我是说','应该是','接着','最后','其次','第二','第三','第四','第五','二是','三是','四是','另一个是','若是','若不','要是','只要','因此','于是','并且','你知道吗'];
+  const SENTENCE_STARTERS = ['所以','但是','另外','同时','其实','可是','不过','如果','虽然'];
+  const NO_BREAK_BEFORE = { '不过': '只不也', '因为': '是就正', '所以': '之无', '同时': '的', '还有': '没', '其实': '', '然后': '', '如果': '', '但是': '', '可是': '', '最后': '的到', '其次': '' };
+  const Q_WORDS = ['什么','怎么','为什么','是不是','有没有','能不能','会不会','要不要','对不对','好不好','可不可以','多少','哪里','哪儿','几点','谁'];
+  const EXCL = ['感谢主','赞美主','哈利路亚','阿们','太好了','太棒了','真好','真棒','好极了','加油'];
+  function isQuestion(clause, inserted) {
+    const c = clause.replace(/[\s，,、]+$/, '');
+    if (/[吗么]$/.test(c) || /呢$/.test(c) && inserted) return true;
+    if (/(是|对|好|行|可以)吧$/.test(c)) return true;
+    if (/呢$/.test(c)) return true;
+    return inserted && Q_WORDS.some(w => c.includes(w)) && !/(没什么|不怎么|什么都|怎么也|为什么.*因为)/.test(c);
+  }
+  const isExcl = (c) => EXCL.some(w => c.includes(w)) || /^(太|真是|多么)\S{1,8}(了|啊|呀)$/.test(c);
+  function cjkRun(run) { const ch = A(run); return ch.filter(isCJK).length * 2 >= ch.length; }
+  function punctuateRun(run) {
+    if (!cjkRun(run)) return run;
+    for (const w of ['感谢主','赞美主','哈利路亚','阿们']) { const i = run.indexOf(w); if (i >= 0 && i + w.length < run.length) return punctuateRun(run.slice(0, i + w.length)) + '！' + punctuateRun(run.slice(i + w.length)); }
+    return splitLong(punctuateRun0(run));
+  }
+  // break clauses longer than 25 chars near the middle, before a pronoun/condition or after 了
+  function splitLong(text) {
+    return text.split(/(，|\u0001)/).map(c => {
+      const ch = A(c); if (ch.length <= 20) return c;
+      let best = -1, bestD = 1e9; const mid = ch.length / 2;
+      for (let i = 6; i < ch.length - 5; i++) {
+        const ok = ch[i - 1] === '了' || ['若','我们','你们','他们','大家','我','你','他','她','就是','这','那'].some(p => startsWith(ch, i, A(p)));
+        if (ok && !'的说是在把被给和与跟让叫'.includes(ch[i - 1]) && Math.abs(i - mid) < bestD) { best = i; bestD = Math.abs(i - mid); }
+      }
+      return best < 0 ? c : splitLong(ch.slice(0, best).join('')) + '，' + splitLong(ch.slice(best).join(''));
+    }).join('');
+  }
+  function punctuateRun0(run) {
+    const ch = A(run); const out = []; let since = 0, sentLen = 0;
+    const words = byLen(CONNECTIVES).map(A);
+    for (let i = 0; i < ch.length; i++) {
+      let hit = null;
+      if (i >= 2 && since >= 3) for (const w of words) { if (startsWith(ch, i, w)) { const nb = NO_BREAK_BEFORE[w.join('')] || ''; if (!nb.includes(ch[i - 1])) hit = w.join(''); break; } }
+      if (!hit && i >= 4 && since >= 4 && /[吗嘛]/.test(ch[i - 1]) && !'？?，。'.includes(ch[i])) { out.push(MARK); sentLen = 0; since = 0; out.push(ch[i]); since++; continue; }
+      if (hit) {
+        const strong = SENTENCE_STARTERS.includes(hit) && sentLen + since >= 20;
+        out.push(strong ? MARK : '，'); sentLen = strong ? 0 : sentLen + since; since = 0;
+      } else if (since >= 25) {
+        // overly long clause: break before a pronoun / after 了 near here
+        const j = out.length; const prev = out[j - 1];
+        if (prev === '了' || ['我','你','他','她','我们','大家','这','那'].some(p => startsWith(ch, i, A(p)))) { out.push('，'); sentLen += since; since = 0; }
+      }
+      out.push(ch[i]); since++;
+      if (sentLen >= 60 && since === 0) { out[out.length - 2] = MARK; sentLen = 0; }
+    }
+    return out.join('');
+  }
+  function resolveMarks(text) {
+    // decide 。？！ for inserted marks and plain 。
+    const ch = A(text); const out = [];
+    for (let i = 0; i < ch.length; i++) {
+      const c = ch[i];
+      if (c === MARK || c === '。') {
+        let k = out.length - 1; while (k >= 0 && !'，,。.!！？?；;\n'.includes(out[k]) ) k--;
+        const clause = out.slice(k + 1).join('');
+        const sentStart = (() => { let m = out.length - 1; while (m >= 0 && !'。.!！？?\n'.includes(out[m])) m--; return out.slice(m + 1).join(''); })();
+        if (isQuestion(clause, c === MARK)) out.push('？');
+        else if (isExcl(clause) || (c === MARK && isExcl(sentStart))) out.push('！');
+        else out.push('。');
+      } else out.push(c);
+    }
+    return out.join('');
+  }
+  function autoPunctuate(text) {
+    const pieces = splitKeepingBreaks(text).map(p => (p.length === 1 && isBreak(p)) ? p : punctuateRun(p));
+    let t = pieces.join('');
+    const last = A(t.trim()).pop();
+    if (last && !isPunct(last) && last !== MARK) {
+      const ch = A(t); let k = ch.length - 1; while (k >= 0 && !'，,。.!！？?；;\n'.includes(ch[k]) && ch[k] !== MARK) k--;
+      const clause = ch.slice(k + 1).join('');
+      if (isQuestion(clause, true)) t += '？'; else if (isExcl(clause)) t += '！';
+    }
+    return resolveMarks(t);
+  }
+  // 然后…还有 / 另外 enumerations of 3+ short items
+  function enumerate(text) {
+    if (/[第首其一二三]/.test(text) && /(第[一二三]|首先|其次|[一二三]是|一个是)/.test(text)) return text;
+    const parts = text.split(/[，,]?(?:然后|还有|另外|以及)/);
+    if (parts.length < 3) return text;
+    const items = parts.map(x => trimListItem(x)).filter(Boolean);
+    if (items.length < 3 || items.some(x => A(x).length > 24) || /[。！？]/.test(items.slice(0, -1).join(''))) return text;
+    return numbered(items);
+  }
+  function paragraphs(text) {
+    if (text.includes('\n') || A(text).length <= 120) return text;
+    const sents = text.match(/[^。！？!?]+[。！？!?]*/g) || [text];
+    const paras = []; let cur = '';
+    for (const s of sents) { cur += s; if (A(cur).length >= 40) { paras.push(cur.trim()); cur = ''; } }
+    if (cur.trim()) { if (paras.length && A(cur).length < 10) paras[paras.length - 1] += cur.trim(); else paras.push(cur.trim()); }
+    return paras.join('\n\n');
+  }
+  // join speech segments (final results / pauses) with boundary punctuation
+  function joinSegments(segs) {
+    let out = '';
+    for (const raw of segs) {
+      const s = raw.trim(); if (!s) continue;
+      if (out && !isPunct(A(out).pop())) out += A(out).length - A(out).join('').search(/[^。！？，]*$/) >= 0 && isQuestion(lastClause(out), true) ? '？' : (A(lastClause(out)).length >= 8 ? '。' : '，');
+      out += s;
+    }
+    return out;
+  }
+  function lastClause(t) { const ch = A(t); let k = ch.length - 1; while (k >= 0 && !'，,。.!！？?；;\n'.includes(ch[k])) k--; return ch.slice(k + 1).join(''); }
+
+  const defaults = { tone: 'clear', entries: [], removeFillers: true, removeRepetition: true, applySelfCorrection: true, formatLists: true, spokenPunctuation: true, autoPunctuate: true };
   function polish(raw, opts) {
     const o = Object.assign({}, defaults, opts || {});
     let t = (raw || '').trim(); if (!t) return '';
     t = applyDictionary(t, o.entries);
     t = faithApply(t);
     if (o.spokenPunctuation) t = applySpokenPunctuation(t);
+    if (o.autoPunctuate) { t = autoPunctuate(t); if (o.formatLists) t = enumerate(t); }
     if (o.applySelfCorrection) t = applySelfCorrections(t);
     if (o.removeFillers) t = removeFillers(t);
     if (o.removeRepetition) t = removeRepetition(t);
     if (o.formatLists) t = formatLists(t);
     t = applyTone(t, o.tone);
-    return tidy(t, o.tone);
+    t = tidy(t, o.tone);
+    return o.autoPunctuate ? paragraphs(t) : t;
   }
 
-  const api = { polish, faithApply, recognitionHints, installedCount: uniqueTerms.length, TONES: { clear: '清晰', casual: '随意', formal: '正式', concise: '简洁' } };
+  const api = { polish, joinSegments, autoPunctuate, faithApply, recognitionHints, installedCount: uniqueTerms.length, TONES: { clear: '清晰', casual: '随意', formal: '正式', concise: '简洁' } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.BenyanPolisher = api;
 })(typeof self !== 'undefined' ? self : this);
