@@ -19,6 +19,7 @@
   <button class="tab on" data-tab="talk">说话</button>
   <button class="tab" data-tab="dict">词典</button>
   <button class="tab" data-tab="hist">历史</button>
+  <button class="tab" data-tab="set">设置</button>
 </nav></header>
 
 <main>
@@ -46,6 +47,14 @@
 <section id="hist" class="pane">
   <button id="clearHist" class="btn ghost">清空历史</button>
   <ul id="history" class="list"></ul>
+</section>
+<section id="set" class="pane">
+  <h2 class="h2">AI 整理（DeepSeek）</h2>
+  <p class="hint">说完后先用本地规则立即整理，再把原话发给 DeepSeek 精修。密钥只存在这台手机的浏览器里，不会上传到别处。</p>
+  <label class="sw"><input type="checkbox" id="aiOn"> 使用 AI 整理</label>
+  <p class="hint">当前密钥：<b id="keyMask">未设置</b></p>
+  <input id="keyInput" type="password" autocomplete="off" placeholder="粘贴 DeepSeek API Key（sk-…）">
+  <div class="row"><button id="saveKey" class="btn">保存</button><button id="clearKey" class="btn ghost">清除密钥</button></div>
 </section>
 </main>
 <footer id="bar"><button id="mic" aria-label="点一下开始说话">🎙️<span id="micLabel">点一下开始说话</span></button></footer>

@@ -43,3 +43,4 @@ test('long text split into paragraphs', () => {
   const out = P.polish(t);
   assert.ok(out.includes('\n\n'), out); assert.ok(!/[，。？！]{2}/.test(out), out); assert.ok(/[。？！]$/.test(out), out);
 });
+test('faith corrections also applied to AI output', () => assert.strictEqual(P.faithApply('耶苏说因信称意，马丁路德和约翰加尔文都讲启示路'), '耶稣说因信称义，马丁·路德和约翰·加尔文都讲启示录'));

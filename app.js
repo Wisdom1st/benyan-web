@@ -22,12 +22,69 @@
   const renderTones = () => document.querySelectorAll('#tones button').forEach(b => b.classList.toggle('on', b.dataset.k === tone));
   renderTones();
 
+  // ---- AI (DeepSeek) ----
+  let aiKey = localStorage.getItem('benyan.dskey') || '';
+  let aiOn = load('benyan.aiOn', true);
+  let aiSeq = 0;
+  const mask = (k) => k ? k.slice(0, 3) + '••••••' + k.slice(-4) : '未设置';
+  function renderKey() { $('keyMask').textContent = mask(aiKey); $('aiOn').checked = aiOn; }
+  $('saveKey').onclick = () => { const k = $('keyInput').value.trim(); if (!k) return; aiKey = k; localStorage.setItem('benyan.dskey', k); $('keyInput').value = ''; renderKey(); status('密钥已保存在这台手机上。'); };
+  $('clearKey').onclick = () => { aiKey = ''; localStorage.removeItem('benyan.dskey'); renderKey(); status('密钥已清除。'); };
+  $('aiOn').onchange = () => { aiOn = $('aiOn').checked; save('benyan.aiOn', aiOn); };
+  renderKey();
+  const SYSTEM = `你是一位听写编辑，服务对象是一位中国改革宗基督徒艺术家和老师。你会收到他口述后语音识别得到的原文。请：
+1. 结合上下文修正语音识别错误和同音错字，尤其是圣经与教会用语（如耶稣、基督、圣灵、因信称义、主日崇拜、查经、团契、和合本人名与书卷名）以及书法、绘画术语（如笔墨、宣纸、中锋、皴法、写意、工笔、篆隶楷行草）。
+2. 加上恰当的中文标点，合理断句、分段。
+3. 删去口头禅、重复和说错后改口的部分（只保留改口之后的意思）。
+4. 保持他的原意和说话风格，不要添加原文没有的内容，不要回答或评论原文。
+5. 只有当他在列举时才用编号列表。
+6. 时间等写法要自然（如“3:00”按语境写成“三点”或“3点”）。
+7. 语气要求：{TONE}。
+8. 个人词典（左边是说法，右边必须写成的样子）：{DICT}
+只输出整理后的正文，不要任何说明。`;
+  const TONE_HINT = { clear: '清晰——去掉杂音，尽量保留原措辞', casual: '随意——自然口语，只把话说顺', formal: '正式——适合邮件和工作消息', concise: '简洁——去掉客套，只留要点' };
+  async function aiPolish(raw) {
+    const dict = entries.length ? entries.map(e => `${e.spoken} → ${e.written}`).join('；') : '无';
+    const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), 30000);
+    try {
+      const r = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST', signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + aiKey },
+        body: JSON.stringify({ model: 'deepseek-chat', temperature: 0.3, messages: [
+          { role: 'system', content: SYSTEM.replace('{TONE}', TONE_HINT[tone] || TONE_HINT.clear).replace('{DICT}', dict) },
+          { role: 'user', content: raw } ] })
+      });
+      if (!r.ok) {
+        const msg = { 401: '密钥无效，请到“设置”重新粘贴。', 402: 'DeepSeek 账户余额不足。', 429: '请求太频繁，请稍后再试。' }[r.status] || ('AI 服务出错（' + r.status + '）。');
+        throw new Error(msg);
+      }
+      const j = await r.json();
+      const text = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content || '').trim();
+      if (!text) throw new Error('AI 没有返回内容。');
+      return P.faithApply(text);
+    } catch (e) {
+      if (e.name === 'AbortError') throw new Error('AI 超时。');
+      if (e instanceof TypeError) throw new Error(navigator.onLine ? '连不上 DeepSeek。' : '现在离线。');
+      throw e;
+    } finally { clearTimeout(timer); }
+  }
+
   function run(record) {
     const raw = $('raw').value.trim();
     $('out').value = raw ? P.polish(raw, { tone, entries }) : '';
+    let item = null;
     if (record && raw) {
-      history.unshift({ t: Date.now(), raw, out: $('out').value });
+      item = { t: Date.now(), raw, out: $('out').value };
+      history.unshift(item);
       history = history.slice(0, 200); save('benyan.history', history); renderHistory();
+    }
+    if (record && raw && aiOn && aiKey) {
+      const seq = ++aiSeq; status('正在用 AI 整理…');
+      aiPolish(raw).then(text => {
+        if (seq !== aiSeq || $('raw').value.trim() !== raw) return;
+        $('out').value = text; status('AI 已整理。点“复制”即可使用。');
+        if (item) { item.out = text; item.ai = true; save('benyan.history', history); renderHistory(); }
+      }).catch(e => { if (seq === aiSeq) status(e.message + '已保留本地整理结果。', true); });
     }
   }
   $('polishBtn').onclick = () => run(true);
@@ -77,7 +134,7 @@
       $('raw').value = base + (base && spoken && !/[。！？，,.!?\n]$/.test(base) ? '。' : '') + spoken;
     };
     rec.onerror = (e) => { const m = ERR[e.error] ?? ('听写出错：' + e.error + '。可以改用键盘上的麦克风。'); if (m) status(m, true); };
-    rec.onend = () => { setMic(false); if ($('raw').value.trim() !== base.trim()) { run(true); if (!$('status').classList.contains('err')) status('已整理。点“复制”即可使用。'); } };
+    rec.onend = () => { setMic(false); if ($('raw').value.trim() !== base.trim()) { const err = $('status').classList.contains('err'); run(true); if (!err && !(aiOn && aiKey)) status('已整理。点“复制”即可使用。'); } };
     try { rec.start(); } catch (err) { status('无法开始听写：' + err.message, true); setMic(false); }
   };
 
@@ -116,5 +173,9 @@
   $('clearHist').onclick = () => { if (confirm('清空全部历史？')) { history = []; save('benyan.history', history); renderHistory(); } };
   renderHistory();
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded && !live) { reloaded = true; location.reload(); } });
+  }
 })();

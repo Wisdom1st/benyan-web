@@ -33,3 +33,4 @@ textarea,input{width:100%;font:inherit;padding:12px;border-radius:12px;border:1p
 .list li small{display:block;color:var(--mut)}
 .list li button{min-height:44px;min-width:56px;border:0;border-radius:10px;background:var(--g);color:#fff}
 .list li button.del{background:#999}
+.h2{font-size:20px;margin:8px 0}.sw{display:flex;align-items:center;gap:10px;min-height:48px;font-size:18px}.sw input{width:26px;height:26px}
